@@ -10,7 +10,7 @@ import { existsSync } from 'fs';
 import path from 'path';
 import { allAcs, SPEC_STATUSES, ASM_STATUSES, Q_STATUSES } from '../parsers/spec.js';
 import { grepPattern } from '../parsers/annotations.js';
-import { latestMtime } from './project.js';
+import { latestMtime, contentDigest } from './project.js';
 
 // severidade base; em modo --ci os códigos em CI_ESCALATES viram erro
 const CI_ESCALATES = new Set(['AC_SEM_PROVA', 'VERIFY_OBSOLETO', 'Q_ABERTA', 'AC_SEM_TASK', 'ARQUIVO_ORFAO']);
@@ -372,9 +372,23 @@ export function auditProject(project, { ci = false } = {}) {
       }
     }
 
-    // verify obsoleto?
+    // verify obsoleto? Com digest gravado, só o conteúdo decide: merge,
+    // rebase e checkout limpo mudam o mtime sem mudar o que foi provado.
+    // Registro legado (sem digest) segue pelo mtime — nunca vira pass.
     const verification = project.verifications[name] || null;
-    if (verification?.timestamp) {
+    if (verification?.digest) {
+      const atual = contentDigest(config.rootDir, [...project.srcFiles, ...project.testFiles]);
+      if (atual !== verification.digest) {
+        findings.push(
+          finding(
+            'VERIFY_OBSOLETO',
+            'aviso',
+            `código/testes mudaram (conteúdo) depois do último verify de ${name} — rode \`onp-spec verify ${name}\` de novo`,
+            { feature: name }
+          )
+        );
+      }
+    } else if (verification?.timestamp) {
       const codeMtime = latestMtime(config.rootDir, [
         ...project.srcFiles,
         ...project.testFiles,
@@ -384,7 +398,7 @@ export function auditProject(project, { ci = false } = {}) {
           finding(
             'VERIFY_OBSOLETO',
             'aviso',
-            `código/testes mudaram depois do último verify de ${name} — rode \`onp-spec verify ${name}\` de novo`,
+            `código/testes mudaram depois do último verify de ${name} (registro sem digest, comparado por data) — rode \`onp-spec verify ${name}\` de novo para gravar o digest`,
             { feature: name }
           )
         );

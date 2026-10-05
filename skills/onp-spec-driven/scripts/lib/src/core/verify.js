@@ -8,6 +8,7 @@ import { execSync, spawnSync } from 'child_process';
 import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'fs';
 import path from 'path';
 import { allAcs } from '../parsers/spec.js';
+import { contentDigest } from './project.js';
 
 const RE_SPEC_TAG = /@spec:(AC-\d{3,})/g;
 const RE_PRINCIPLE_TAG = /@principle:(P-\d{3,})/g;
@@ -196,6 +197,7 @@ export function runVerify(project, featureName) {
     feature: featureName,
     timestamp: new Date().toISOString(),
     gitRev: gitRev(config.rootDir),
+    digest: contentDigest(config.rootDir, [...project.srcFiles, ...project.testFiles]),
     command: config.testCommand,
     reporter: config.reporter,
     exitCode: proc.status,

@@ -2,6 +2,7 @@
 // tasks, constituição, anotações nos testes/código e resultados de verify.
 
 import { readdirSync, readFileSync, existsSync, statSync } from 'fs';
+import { createHash } from 'crypto';
 import path from 'path';
 import { parseSpec } from '../parsers/spec.js';
 import { parseTasks } from '../parsers/tasks.js';
@@ -107,4 +108,22 @@ export function latestMtime(rootDir, files) {
     }
   }
   return latest;
+}
+
+// Digest do CONTEÚDO dos arquivos dados: sha256 sobre a lista ordenada de
+// (caminho relativo, sha256 do conteúdo). Merge, rebase e checkout limpo
+// mudam o mtime sem mudar o conteúdo; o digest só muda quando um arquivo
+// muda, entra ou sai. É o que o verify grava e o audit confere.
+export function contentDigest(rootDir, files) {
+  const linhas = [];
+  for (const rel of [...new Set(files)].sort()) {
+    let conteudo;
+    try {
+      conteudo = readFileSync(path.join(rootDir, rel));
+    } catch {
+      continue; // arquivo listado mas inexistente — tratado em outro achado
+    }
+    linhas.push(`${rel}\0${createHash('sha256').update(conteudo).digest('hex')}\n`);
+  }
+  return `sha256:${createHash('sha256').update(linhas.join('')).digest('hex')}`;
 }
